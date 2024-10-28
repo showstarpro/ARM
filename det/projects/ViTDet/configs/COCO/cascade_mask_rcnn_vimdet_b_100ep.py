@@ -47,4 +47,4 @@ model.roi_heads.update(
     ],
 )
 
-model.backbone.net.pretrained = "/lpai/ARM/mamba_mlp.pth"
+model.backbone.net.pretrained = "/lpai/volumes/so-volume-ga/lhp/mam/arm_base_l40s/checkpoint-199.pth"
