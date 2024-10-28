@@ -15,10 +15,11 @@ model = model_zoo.get_config("common/models/mask_rcnn_vimdet.py").model
 train = model_zoo.get_config("common/train.py").train
 train.amp.enabled = True
 train.ddp.fp16_compression = True
-train.init_checkpoint = (
-    "detectron2://ImageNetPretrained/MAE/mae_pretrain_vit_base.pth?matching_heuristics=True"
-)
+# train.init_checkpoint = (
+#     "detectron2://ImageNetPretrained/MAE/mae_pretrain_vit_base.pth?matching_heuristics=True"
+# )
 
+train.init_checkpoint = ""
 
 # Schedule
 # 100 ep = 184375 iters * 64 images/iter / 118000 images/ep
