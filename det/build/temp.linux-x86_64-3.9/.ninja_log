@@ -1,0 +1,6 @@
+# ninja log v5
+11	5066	1730096239527312618	/lpai/ARM/det/build/temp.linux-x86_64-3.9/lpai/ARM/det/detectron2/layers/csrc/cocoeval/cocoeval.o	5540fc74beb8480b
+11	6931	1730096241384749991	/lpai/ARM/det/build/temp.linux-x86_64-3.9/lpai/ARM/det/detectron2/layers/csrc/box_iou_rotated/box_iou_rotated_cpu.o	845485881ffdf4bc
+11	7104	1730096241558361516	/lpai/ARM/det/build/temp.linux-x86_64-3.9/lpai/ARM/det/detectron2/layers/csrc/nms_rotated/nms_rotated_cpu.o	2392d0cf96d944b6
+10	7838	1730096242293307673	/lpai/ARM/det/build/temp.linux-x86_64-3.9/lpai/ARM/det/detectron2/layers/csrc/ROIAlignRotated/ROIAlignRotated_cpu.o	f59e715ae46a946c
+11	21281	1730096255732688214	/lpai/ARM/det/build/temp.linux-x86_64-3.9/lpai/ARM/det/detectron2/layers/csrc/vision.o	f07f108309a44455

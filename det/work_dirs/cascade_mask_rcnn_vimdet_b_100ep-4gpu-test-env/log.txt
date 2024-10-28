@@ -1,0 +1,1515 @@
+[10/28 01:32:03] detectron2 INFO: Rank of current process: 0. World size: 1
+[10/28 01:32:03] detectron2 INFO: Environment info:
+-------------------------------  -------------------------------------------------------------------------------
+sys.platform                     linux
+Python                           3.10.13 (main, Sep 11 2023, 13:44:35) [GCC 11.2.0]
+numpy                            1.26.2
+detectron2                       0.6 @/lpai/ARM/det/detectron2
+Compiler                         GCC 9.4
+CUDA compiler                    CUDA 12.1
+DETECTRON2_ENV_MODULE            <not set>
+PyTorch                          2.1.2+cu121 @/root/anaconda3/envs/mam/lib/python3.10/site-packages/torch
+PyTorch debug build              False
+torch._C._GLIBCXX_USE_CXX11_ABI  False
+GPU available                    No: torch.cuda.is_available() == False
+Pillow                           10.1.0
+torchvision                      0.16.2+cu121 @/root/anaconda3/envs/mam/lib/python3.10/site-packages/torchvision
+fvcore                           0.1.5.post20221221
+iopath                           0.1.9
+cv2                              4.8.1
+-------------------------------  -------------------------------------------------------------------------------
+PyTorch built with:
+  - GCC 9.3
+  - C++ Version: 201703
+  - Intel(R) oneAPI Math Kernel Library Version 2022.2-Product Build 20220804 for Intel(R) 64 architecture applications
+  - Intel(R) MKL-DNN v3.1.1 (Git Hash 64f6bcbcbab628e96f33a62c3e975f8535a7bde4)
+  - OpenMP 201511 (a.k.a. OpenMP 4.5)
+  - LAPACK is enabled (usually provided by MKL)
+  - NNPACK is enabled
+  - CPU capability usage: AVX512
+  - Build settings: BLAS_INFO=mkl, BUILD_TYPE=Release, CUDA_VERSION=12.1, CUDNN_VERSION=8.9.2, CXX_COMPILER=/opt/rh/devtoolset-9/root/usr/bin/c++, CXX_FLAGS= -D_GLIBCXX_USE_CXX11_ABI=0 -fabi-version=11 -fvisibility-inlines-hidden -DUSE_PTHREADPOOL -DNDEBUG -DUSE_KINETO -DLIBKINETO_NOROCTRACER -DUSE_FBGEMM -DUSE_QNNPACK -DUSE_PYTORCH_QNNPACK -DUSE_XNNPACK -DSYMBOLICATE_MOBILE_DEBUG_HANDLE -O2 -fPIC -Wall -Wextra -Werror=return-type -Werror=non-virtual-dtor -Werror=bool-operation -Wnarrowing -Wno-missing-field-initializers -Wno-type-limits -Wno-array-bounds -Wno-unknown-pragmas -Wno-unused-parameter -Wno-unused-function -Wno-unused-result -Wno-strict-overflow -Wno-strict-aliasing -Wno-stringop-overflow -Wno-psabi -Wno-error=pedantic -Wno-error=old-style-cast -Wno-invalid-partial-specialization -Wno-unused-private-field -Wno-aligned-allocation-unavailable -Wno-missing-braces -fdiagnostics-color=always -faligned-new -Wno-unused-but-set-variable -Wno-maybe-uninitialized -fno-math-errno -fno-trapping-math -Werror=format -Werror=cast-function-type -Wno-stringop-overflow, LAPACK_INFO=mkl, PERF_WITH_AVX=1, PERF_WITH_AVX2=1, PERF_WITH_AVX512=1, TORCH_DISABLE_GPU_ASSERTS=ON, TORCH_VERSION=2.1.2, USE_CUDA=ON, USE_CUDNN=ON, USE_EXCEPTION_PTR=1, USE_GFLAGS=OFF, USE_GLOG=OFF, USE_MKL=ON, USE_MKLDNN=ON, USE_MPI=OFF, USE_NCCL=1, USE_NNPACK=ON, USE_OPENMP=ON, USE_ROCM=OFF, 
+
+[10/28 01:32:03] detectron2 INFO: Command line arguments: Namespace(config_file='projects/ViTDet/configs/COCO/cascade_mask_rcnn_vimdet_b_100ep.py', resume=False, eval_only=False, num_gpus=1, num_machines=1, machine_rank=0, dist_url='tcp://127.13.44.12:60900', opts=['train.output_dir=/lpai/ARM/det/work_dirs/cascade_mask_rcnn_vimdet_b_100ep-4gpu-test-env', 'dataloader.train.num_workers=128', 'dataloader.test.num_workers=8'])
+[10/28 01:32:03] detectron2 INFO: Contents of args.config_file=projects/ViTDet/configs/COCO/cascade_mask_rcnn_vimdet_b_100ep.py:
+from detectron2.config import LazyCall as L
+from detectron2.layers import ShapeSpec
+from detectron2.modeling.box_regression import Box2BoxTransform
+from detectron2.modeling.matcher import Matcher
+from detectron2.modeling.roi_heads import (
+    FastRCNNOutputLayers,
+    FastRCNNConvFCHead,
+    CascadeROIHeads,
+)
+
+from .mask_rcnn_vimdet_b_100ep import (
+    dataloader,
+    lr_multiplier,
+    model,
+    train,
+    optimizer,
+    get_vim_lr_decay_rate,
+)
+
+# arguments that don't exist for Cascade R-CNN
+[model.roi_heads.pop(k) for k in ["box_head", "box_predictor", "proposal_matcher"]]
+
+model.roi_heads.update(
+    _target_=CascadeROIHeads,
+    box_heads=[
+        L(FastRCNNConvFCHead)(
+            input_shape=ShapeSpec(channels=256, height=7, width=7),
+            conv_dims=[256, 256, 256, 256],
+            fc_dims=[1024],
+            conv_norm="LN",
+        )
+        for _ in range(3)
+    ],
+    box_predictors=[
+        L(FastRCNNOutputLayers)(
+            input_shape=ShapeSpec(channels=1024),
+            test_score_thresh=0.05,
+            box2box_transform=L(Box2BoxTransform)(weights=(w1, w1, w2, w2)),
+            cls_agnostic_bbox_reg=True,
+            num_classes="${...num_classes}",
+        )
+        for (w1, w2) in [(10, 5), (20, 10), (30, 15)]
+    ],
+    proposal_matchers=[
+        L(Matcher)(thresholds=[th], labels=[0, 1], allow_low_quality_matches=False)
+        for th in [0.5, 0.6, 0.7]
+    ],
+)
+
+model.backbone.net.pretrained = "/lpai/ARM/mamba_mlp.pth"
+[10/28 01:32:03] detectron2 INFO: Full config saved to /lpai/ARM/det/work_dirs/cascade_mask_rcnn_vimdet_b_100ep-4gpu-test-env/config.yaml
+[10/28 01:32:03] d2.utils.env INFO: Using a generated random seed 3936781
+[10/28 01:32:08] d2.modeling.backbone.vim INFO: _IncompatibleKeys(missing_keys=[], unexpected_keys=['ar_token', 'dec_pos_embed', 'mask', 'enc2dec.weight', 'enc2dec.bias', 'dec_block.0.attn2.q.weight', 'dec_block.0.attn2.q.bias', 'dec_block.0.attn2.kv.weight', 'dec_block.0.attn2.kv.bias', 'dec_block.0.attn2.proj.weight', 'dec_block.0.attn2.proj.bias', 'dec_block.0.norm2_1.weight', 'dec_block.0.norm2_1.bias', 'dec_block.0.norm2_2.weight', 'dec_block.0.norm2_2.bias', 'dec_block.0.norm2.weight', 'dec_block.0.norm2.bias', 'dec_block.0.mlp.fc1.weight', 'dec_block.0.mlp.fc1.bias', 'dec_block.0.mlp.fc2.weight', 'dec_block.0.mlp.fc2.bias', 'dec_block.1.attn2.q.weight', 'dec_block.1.attn2.q.bias', 'dec_block.1.attn2.kv.weight', 'dec_block.1.attn2.kv.bias', 'dec_block.1.attn2.proj.weight', 'dec_block.1.attn2.proj.bias', 'dec_block.1.norm2_1.weight', 'dec_block.1.norm2_1.bias', 'dec_block.1.norm2_2.weight', 'dec_block.1.norm2_2.bias', 'dec_block.1.norm2.weight', 'dec_block.1.norm2.bias', 'dec_block.1.mlp.fc1.weight', 'dec_block.1.mlp.fc1.bias', 'dec_block.1.mlp.fc2.weight', 'dec_block.1.mlp.fc2.bias', 'dec_block.2.attn2.q.weight', 'dec_block.2.attn2.q.bias', 'dec_block.2.attn2.kv.weight', 'dec_block.2.attn2.kv.bias', 'dec_block.2.attn2.proj.weight', 'dec_block.2.attn2.proj.bias', 'dec_block.2.norm2_1.weight', 'dec_block.2.norm2_1.bias', 'dec_block.2.norm2_2.weight', 'dec_block.2.norm2_2.bias', 'dec_block.2.norm2.weight', 'dec_block.2.norm2.bias', 'dec_block.2.mlp.fc1.weight', 'dec_block.2.mlp.fc1.bias', 'dec_block.2.mlp.fc2.weight', 'dec_block.2.mlp.fc2.bias', 'dec_block.3.attn2.q.weight', 'dec_block.3.attn2.q.bias', 'dec_block.3.attn2.kv.weight', 'dec_block.3.attn2.kv.bias', 'dec_block.3.attn2.proj.weight', 'dec_block.3.attn2.proj.bias', 'dec_block.3.norm2_1.weight', 'dec_block.3.norm2_1.bias', 'dec_block.3.norm2_2.weight', 'dec_block.3.norm2_2.bias', 'dec_block.3.norm2.weight', 'dec_block.3.norm2.bias', 'dec_block.3.mlp.fc1.weight', 'dec_block.3.mlp.fc1.bias', 'dec_block.3.mlp.fc2.weight', 'dec_block.3.mlp.fc2.bias', 'norm_1.weight', 'norm_1.bias', 'norm_2.weight', 'norm_2.bias', 'norm_3.weight', 'norm_3.bias', 'norm_4.weight', 'norm_4.bias', 'ar_norm.weight', 'ar_norm.bias', 'ar_pred.weight', 'ar_pred.bias'])
+[10/28 01:32:08] detectron2 INFO: Model:
+GeneralizedRCNN(
+  (backbone): SimpleFeaturePyramid(
+    (simfp_2): Sequential(
+      (0): ConvTranspose2d(768, 384, kernel_size=(2, 2), stride=(2, 2))
+      (1): LayerNorm()
+      (2): GELU(approximate='none')
+      (3): ConvTranspose2d(384, 192, kernel_size=(2, 2), stride=(2, 2))
+      (4): Conv2d(
+        192, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (5): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (simfp_3): Sequential(
+      (0): ConvTranspose2d(768, 384, kernel_size=(2, 2), stride=(2, 2))
+      (1): Conv2d(
+        384, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (2): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (simfp_4): Sequential(
+      (0): Conv2d(
+        768, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (1): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (simfp_5): Sequential(
+      (0): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+      (1): Conv2d(
+        768, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (2): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (net): VisionMambaDet(
+      (patch_embed): PatchEmbed(
+        (proj): Conv2d(3, 768, kernel_size=(16, 16), stride=(16, 16))
+        (norm): Identity()
+      )
+      (pos_drop): Dropout(p=0.0, inplace=False)
+      (drop_path): DropPath()
+      (layers): ModuleList(
+        (0-1): 2 x Block(
+          (mixer): Mamba(
+            (in_proj): Linear(in_features=768, out_features=1536, bias=False)
+            (conv1d): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (act): SiLU()
+            (x_proj): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_b): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c_b): Linear(in_features=48, out_features=768, bias=True)
+            (out_proj): Linear(in_features=768, out_features=768, bias=False)
+          )
+          (mlp): SwiGLU(
+            (w1): Linear(in_features=768, out_features=2048, bias=True)
+            (w2): Linear(in_features=768, out_features=2048, bias=True)
+            (act): SiLU()
+            (ffn_ln): Identity()
+            (w3): Linear(in_features=2048, out_features=768, bias=True)
+            (drop): Dropout(p=0.0, inplace=False)
+          )
+          (drop_path): Identity()
+          (norm1): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+          (norm2): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+        )
+        (2-11): 10 x Block(
+          (mixer): Mamba(
+            (in_proj): Linear(in_features=768, out_features=1536, bias=False)
+            (conv1d): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (act): SiLU()
+            (x_proj): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_b): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c_b): Linear(in_features=48, out_features=768, bias=True)
+            (out_proj): Linear(in_features=768, out_features=768, bias=False)
+          )
+          (mlp): SwiGLU(
+            (w1): Linear(in_features=768, out_features=2048, bias=True)
+            (w2): Linear(in_features=768, out_features=2048, bias=True)
+            (act): SiLU()
+            (ffn_ln): Identity()
+            (w3): Linear(in_features=2048, out_features=768, bias=True)
+            (drop): Dropout(p=0.0, inplace=False)
+          )
+          (drop_path): DropPath()
+          (norm1): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+          (norm2): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+        )
+      )
+    )
+    (top_block): LastLevelMaxPool()
+  )
+  (proposal_generator): RPN(
+    (rpn_head): StandardRPNHead(
+      (conv): Sequential(
+        (conv0): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)
+          (activation): ReLU()
+        )
+        (conv1): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)
+          (activation): ReLU()
+        )
+      )
+      (objectness_logits): Conv2d(256, 3, kernel_size=(1, 1), stride=(1, 1))
+      (anchor_deltas): Conv2d(256, 12, kernel_size=(1, 1), stride=(1, 1))
+    )
+    (anchor_generator): DefaultAnchorGenerator(
+      (cell_anchors): BufferList()
+    )
+  )
+  (roi_heads): CascadeROIHeads(
+    (box_pooler): ROIPooler(
+      (level_poolers): ModuleList(
+        (0): ROIAlign(output_size=(7, 7), spatial_scale=0.25, sampling_ratio=0, aligned=True)
+        (1): ROIAlign(output_size=(7, 7), spatial_scale=0.125, sampling_ratio=0, aligned=True)
+        (2): ROIAlign(output_size=(7, 7), spatial_scale=0.0625, sampling_ratio=0, aligned=True)
+        (3): ROIAlign(output_size=(7, 7), spatial_scale=0.03125, sampling_ratio=0, aligned=True)
+      )
+    )
+    (box_head): ModuleList(
+      (0-2): 3 x FastRCNNConvFCHead(
+        (conv1): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (conv2): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (conv3): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (conv4): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (flatten): Flatten(start_dim=1, end_dim=-1)
+        (fc1): Linear(in_features=12544, out_features=1024, bias=True)
+        (fc_relu1): ReLU()
+      )
+    )
+    (box_predictor): ModuleList(
+      (0-2): 3 x FastRCNNOutputLayers(
+        (cls_score): Linear(in_features=1024, out_features=81, bias=True)
+        (bbox_pred): Linear(in_features=1024, out_features=4, bias=True)
+      )
+    )
+    (mask_pooler): ROIPooler(
+      (level_poolers): ModuleList(
+        (0): ROIAlign(output_size=(14, 14), spatial_scale=0.25, sampling_ratio=0, aligned=True)
+        (1): ROIAlign(output_size=(14, 14), spatial_scale=0.125, sampling_ratio=0, aligned=True)
+        (2): ROIAlign(output_size=(14, 14), spatial_scale=0.0625, sampling_ratio=0, aligned=True)
+        (3): ROIAlign(output_size=(14, 14), spatial_scale=0.03125, sampling_ratio=0, aligned=True)
+      )
+    )
+    (mask_head): MaskRCNNConvUpsampleHead(
+      (mask_fcn1): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (mask_fcn2): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (mask_fcn3): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (mask_fcn4): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (deconv): ConvTranspose2d(256, 256, kernel_size=(2, 2), stride=(2, 2))
+      (deconv_relu): ReLU()
+      (predictor): Conv2d(256, 80, kernel_size=(1, 1), stride=(1, 1))
+    )
+  )
+)
+[10/28 04:59:53] detectron2 INFO: Rank of current process: 0. World size: 1
+[10/28 04:59:53] detectron2 INFO: Environment info:
+-------------------------------  -------------------------------------------------------------------------------
+sys.platform                     linux
+Python                           3.10.13 (main, Sep 11 2023, 13:44:35) [GCC 11.2.0]
+numpy                            1.26.2
+detectron2                       0.6 @/lpai/ARM/det/detectron2
+Compiler                         GCC 9.4
+CUDA compiler                    CUDA 12.1
+DETECTRON2_ENV_MODULE            <not set>
+PyTorch                          2.1.2+cu121 @/root/anaconda3/envs/mam/lib/python3.10/site-packages/torch
+PyTorch debug build              False
+torch._C._GLIBCXX_USE_CXX11_ABI  False
+GPU available                    No: torch.cuda.is_available() == False
+Pillow                           10.1.0
+torchvision                      0.16.2+cu121 @/root/anaconda3/envs/mam/lib/python3.10/site-packages/torchvision
+fvcore                           0.1.5.post20221221
+iopath                           0.1.9
+cv2                              4.8.1
+-------------------------------  -------------------------------------------------------------------------------
+PyTorch built with:
+  - GCC 9.3
+  - C++ Version: 201703
+  - Intel(R) oneAPI Math Kernel Library Version 2022.2-Product Build 20220804 for Intel(R) 64 architecture applications
+  - Intel(R) MKL-DNN v3.1.1 (Git Hash 64f6bcbcbab628e96f33a62c3e975f8535a7bde4)
+  - OpenMP 201511 (a.k.a. OpenMP 4.5)
+  - LAPACK is enabled (usually provided by MKL)
+  - NNPACK is enabled
+  - CPU capability usage: AVX512
+  - Build settings: BLAS_INFO=mkl, BUILD_TYPE=Release, CUDA_VERSION=12.1, CUDNN_VERSION=8.9.2, CXX_COMPILER=/opt/rh/devtoolset-9/root/usr/bin/c++, CXX_FLAGS= -D_GLIBCXX_USE_CXX11_ABI=0 -fabi-version=11 -fvisibility-inlines-hidden -DUSE_PTHREADPOOL -DNDEBUG -DUSE_KINETO -DLIBKINETO_NOROCTRACER -DUSE_FBGEMM -DUSE_QNNPACK -DUSE_PYTORCH_QNNPACK -DUSE_XNNPACK -DSYMBOLICATE_MOBILE_DEBUG_HANDLE -O2 -fPIC -Wall -Wextra -Werror=return-type -Werror=non-virtual-dtor -Werror=bool-operation -Wnarrowing -Wno-missing-field-initializers -Wno-type-limits -Wno-array-bounds -Wno-unknown-pragmas -Wno-unused-parameter -Wno-unused-function -Wno-unused-result -Wno-strict-overflow -Wno-strict-aliasing -Wno-stringop-overflow -Wno-psabi -Wno-error=pedantic -Wno-error=old-style-cast -Wno-invalid-partial-specialization -Wno-unused-private-field -Wno-aligned-allocation-unavailable -Wno-missing-braces -fdiagnostics-color=always -faligned-new -Wno-unused-but-set-variable -Wno-maybe-uninitialized -fno-math-errno -fno-trapping-math -Werror=format -Werror=cast-function-type -Wno-stringop-overflow, LAPACK_INFO=mkl, PERF_WITH_AVX=1, PERF_WITH_AVX2=1, PERF_WITH_AVX512=1, TORCH_DISABLE_GPU_ASSERTS=ON, TORCH_VERSION=2.1.2, USE_CUDA=ON, USE_CUDNN=ON, USE_EXCEPTION_PTR=1, USE_GFLAGS=OFF, USE_GLOG=OFF, USE_MKL=ON, USE_MKLDNN=ON, USE_MPI=OFF, USE_NCCL=1, USE_NNPACK=ON, USE_OPENMP=ON, USE_ROCM=OFF, 
+
+[10/28 04:59:53] detectron2 INFO: Command line arguments: Namespace(config_file='projects/ViTDet/configs/COCO/cascade_mask_rcnn_vimdet_b_100ep.py', resume=False, eval_only=False, num_gpus=1, num_machines=1, machine_rank=0, dist_url='tcp://127.13.44.12:60900', opts=['train.output_dir=/lpai/ARM/det/work_dirs/cascade_mask_rcnn_vimdet_b_100ep-4gpu-test-env', 'dataloader.train.num_workers=128', 'dataloader.test.num_workers=8'])
+[10/28 04:59:53] detectron2 INFO: Contents of args.config_file=projects/ViTDet/configs/COCO/cascade_mask_rcnn_vimdet_b_100ep.py:
+from detectron2.config import LazyCall as L
+from detectron2.layers import ShapeSpec
+from detectron2.modeling.box_regression import Box2BoxTransform
+from detectron2.modeling.matcher import Matcher
+from detectron2.modeling.roi_heads import (
+    FastRCNNOutputLayers,
+    FastRCNNConvFCHead,
+    CascadeROIHeads,
+)
+
+from .mask_rcnn_vimdet_b_100ep import (
+    dataloader,
+    lr_multiplier,
+    model,
+    train,
+    optimizer,
+    get_vim_lr_decay_rate,
+)
+
+# arguments that don't exist for Cascade R-CNN
+[model.roi_heads.pop(k) for k in ["box_head", "box_predictor", "proposal_matcher"]]
+
+model.roi_heads.update(
+    _target_=CascadeROIHeads,
+    box_heads=[
+        L(FastRCNNConvFCHead)(
+            input_shape=ShapeSpec(channels=256, height=7, width=7),
+            conv_dims=[256, 256, 256, 256],
+            fc_dims=[1024],
+            conv_norm="LN",
+        )
+        for _ in range(3)
+    ],
+    box_predictors=[
+        L(FastRCNNOutputLayers)(
+            input_shape=ShapeSpec(channels=1024),
+            test_score_thresh=0.05,
+            box2box_transform=L(Box2BoxTransform)(weights=(w1, w1, w2, w2)),
+            cls_agnostic_bbox_reg=True,
+            num_classes="${...num_classes}",
+        )
+        for (w1, w2) in [(10, 5), (20, 10), (30, 15)]
+    ],
+    proposal_matchers=[
+        L(Matcher)(thresholds=[th], labels=[0, 1], allow_low_quality_matches=False)
+        for th in [0.5, 0.6, 0.7]
+    ],
+)
+
+model.backbone.net.pretrained = "/lpai/ARM/mamba_mlp.pth"
+[10/28 04:59:53] detectron2 INFO: Full config saved to /lpai/ARM/det/work_dirs/cascade_mask_rcnn_vimdet_b_100ep-4gpu-test-env/config.yaml
+[10/28 04:59:53] d2.utils.env INFO: Using a generated random seed 53859602
+[10/28 04:59:56] d2.modeling.backbone.vim INFO: _IncompatibleKeys(missing_keys=[], unexpected_keys=['ar_token', 'dec_pos_embed', 'mask', 'enc2dec.weight', 'enc2dec.bias', 'dec_block.0.attn2.q.weight', 'dec_block.0.attn2.q.bias', 'dec_block.0.attn2.kv.weight', 'dec_block.0.attn2.kv.bias', 'dec_block.0.attn2.proj.weight', 'dec_block.0.attn2.proj.bias', 'dec_block.0.norm2_1.weight', 'dec_block.0.norm2_1.bias', 'dec_block.0.norm2_2.weight', 'dec_block.0.norm2_2.bias', 'dec_block.0.norm2.weight', 'dec_block.0.norm2.bias', 'dec_block.0.mlp.fc1.weight', 'dec_block.0.mlp.fc1.bias', 'dec_block.0.mlp.fc2.weight', 'dec_block.0.mlp.fc2.bias', 'dec_block.1.attn2.q.weight', 'dec_block.1.attn2.q.bias', 'dec_block.1.attn2.kv.weight', 'dec_block.1.attn2.kv.bias', 'dec_block.1.attn2.proj.weight', 'dec_block.1.attn2.proj.bias', 'dec_block.1.norm2_1.weight', 'dec_block.1.norm2_1.bias', 'dec_block.1.norm2_2.weight', 'dec_block.1.norm2_2.bias', 'dec_block.1.norm2.weight', 'dec_block.1.norm2.bias', 'dec_block.1.mlp.fc1.weight', 'dec_block.1.mlp.fc1.bias', 'dec_block.1.mlp.fc2.weight', 'dec_block.1.mlp.fc2.bias', 'dec_block.2.attn2.q.weight', 'dec_block.2.attn2.q.bias', 'dec_block.2.attn2.kv.weight', 'dec_block.2.attn2.kv.bias', 'dec_block.2.attn2.proj.weight', 'dec_block.2.attn2.proj.bias', 'dec_block.2.norm2_1.weight', 'dec_block.2.norm2_1.bias', 'dec_block.2.norm2_2.weight', 'dec_block.2.norm2_2.bias', 'dec_block.2.norm2.weight', 'dec_block.2.norm2.bias', 'dec_block.2.mlp.fc1.weight', 'dec_block.2.mlp.fc1.bias', 'dec_block.2.mlp.fc2.weight', 'dec_block.2.mlp.fc2.bias', 'dec_block.3.attn2.q.weight', 'dec_block.3.attn2.q.bias', 'dec_block.3.attn2.kv.weight', 'dec_block.3.attn2.kv.bias', 'dec_block.3.attn2.proj.weight', 'dec_block.3.attn2.proj.bias', 'dec_block.3.norm2_1.weight', 'dec_block.3.norm2_1.bias', 'dec_block.3.norm2_2.weight', 'dec_block.3.norm2_2.bias', 'dec_block.3.norm2.weight', 'dec_block.3.norm2.bias', 'dec_block.3.mlp.fc1.weight', 'dec_block.3.mlp.fc1.bias', 'dec_block.3.mlp.fc2.weight', 'dec_block.3.mlp.fc2.bias', 'norm_1.weight', 'norm_1.bias', 'norm_2.weight', 'norm_2.bias', 'norm_3.weight', 'norm_3.bias', 'norm_4.weight', 'norm_4.bias', 'ar_norm.weight', 'ar_norm.bias', 'ar_pred.weight', 'ar_pred.bias'])
+[10/28 04:59:57] detectron2 INFO: Model:
+GeneralizedRCNN(
+  (backbone): SimpleFeaturePyramid(
+    (simfp_2): Sequential(
+      (0): ConvTranspose2d(768, 384, kernel_size=(2, 2), stride=(2, 2))
+      (1): LayerNorm()
+      (2): GELU(approximate='none')
+      (3): ConvTranspose2d(384, 192, kernel_size=(2, 2), stride=(2, 2))
+      (4): Conv2d(
+        192, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (5): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (simfp_3): Sequential(
+      (0): ConvTranspose2d(768, 384, kernel_size=(2, 2), stride=(2, 2))
+      (1): Conv2d(
+        384, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (2): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (simfp_4): Sequential(
+      (0): Conv2d(
+        768, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (1): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (simfp_5): Sequential(
+      (0): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+      (1): Conv2d(
+        768, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (2): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (net): VisionMambaDet(
+      (patch_embed): PatchEmbed(
+        (proj): Conv2d(3, 768, kernel_size=(16, 16), stride=(16, 16))
+        (norm): Identity()
+      )
+      (pos_drop): Dropout(p=0.0, inplace=False)
+      (drop_path): DropPath()
+      (layers): ModuleList(
+        (0-1): 2 x Block(
+          (mixer): Mamba(
+            (in_proj): Linear(in_features=768, out_features=1536, bias=False)
+            (conv1d): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (act): SiLU()
+            (x_proj): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_b): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c_b): Linear(in_features=48, out_features=768, bias=True)
+            (out_proj): Linear(in_features=768, out_features=768, bias=False)
+          )
+          (mlp): SwiGLU(
+            (w1): Linear(in_features=768, out_features=2048, bias=True)
+            (w2): Linear(in_features=768, out_features=2048, bias=True)
+            (act): SiLU()
+            (ffn_ln): Identity()
+            (w3): Linear(in_features=2048, out_features=768, bias=True)
+            (drop): Dropout(p=0.0, inplace=False)
+          )
+          (drop_path): Identity()
+          (norm1): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+          (norm2): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+        )
+        (2-11): 10 x Block(
+          (mixer): Mamba(
+            (in_proj): Linear(in_features=768, out_features=1536, bias=False)
+            (conv1d): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (act): SiLU()
+            (x_proj): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_b): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c_b): Linear(in_features=48, out_features=768, bias=True)
+            (out_proj): Linear(in_features=768, out_features=768, bias=False)
+          )
+          (mlp): SwiGLU(
+            (w1): Linear(in_features=768, out_features=2048, bias=True)
+            (w2): Linear(in_features=768, out_features=2048, bias=True)
+            (act): SiLU()
+            (ffn_ln): Identity()
+            (w3): Linear(in_features=2048, out_features=768, bias=True)
+            (drop): Dropout(p=0.0, inplace=False)
+          )
+          (drop_path): DropPath()
+          (norm1): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+          (norm2): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+        )
+      )
+    )
+    (top_block): LastLevelMaxPool()
+  )
+  (proposal_generator): RPN(
+    (rpn_head): StandardRPNHead(
+      (conv): Sequential(
+        (conv0): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)
+          (activation): ReLU()
+        )
+        (conv1): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)
+          (activation): ReLU()
+        )
+      )
+      (objectness_logits): Conv2d(256, 3, kernel_size=(1, 1), stride=(1, 1))
+      (anchor_deltas): Conv2d(256, 12, kernel_size=(1, 1), stride=(1, 1))
+    )
+    (anchor_generator): DefaultAnchorGenerator(
+      (cell_anchors): BufferList()
+    )
+  )
+  (roi_heads): CascadeROIHeads(
+    (box_pooler): ROIPooler(
+      (level_poolers): ModuleList(
+        (0): ROIAlign(output_size=(7, 7), spatial_scale=0.25, sampling_ratio=0, aligned=True)
+        (1): ROIAlign(output_size=(7, 7), spatial_scale=0.125, sampling_ratio=0, aligned=True)
+        (2): ROIAlign(output_size=(7, 7), spatial_scale=0.0625, sampling_ratio=0, aligned=True)
+        (3): ROIAlign(output_size=(7, 7), spatial_scale=0.03125, sampling_ratio=0, aligned=True)
+      )
+    )
+    (box_head): ModuleList(
+      (0-2): 3 x FastRCNNConvFCHead(
+        (conv1): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (conv2): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (conv3): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (conv4): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (flatten): Flatten(start_dim=1, end_dim=-1)
+        (fc1): Linear(in_features=12544, out_features=1024, bias=True)
+        (fc_relu1): ReLU()
+      )
+    )
+    (box_predictor): ModuleList(
+      (0-2): 3 x FastRCNNOutputLayers(
+        (cls_score): Linear(in_features=1024, out_features=81, bias=True)
+        (bbox_pred): Linear(in_features=1024, out_features=4, bias=True)
+      )
+    )
+    (mask_pooler): ROIPooler(
+      (level_poolers): ModuleList(
+        (0): ROIAlign(output_size=(14, 14), spatial_scale=0.25, sampling_ratio=0, aligned=True)
+        (1): ROIAlign(output_size=(14, 14), spatial_scale=0.125, sampling_ratio=0, aligned=True)
+        (2): ROIAlign(output_size=(14, 14), spatial_scale=0.0625, sampling_ratio=0, aligned=True)
+        (3): ROIAlign(output_size=(14, 14), spatial_scale=0.03125, sampling_ratio=0, aligned=True)
+      )
+    )
+    (mask_head): MaskRCNNConvUpsampleHead(
+      (mask_fcn1): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (mask_fcn2): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (mask_fcn3): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (mask_fcn4): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (deconv): ConvTranspose2d(256, 256, kernel_size=(2, 2), stride=(2, 2))
+      (deconv_relu): ReLU()
+      (predictor): Conv2d(256, 80, kernel_size=(1, 1), stride=(1, 1))
+    )
+  )
+)
+[10/28 05:17:28] detectron2 INFO: Rank of current process: 0. World size: 1
+[10/28 05:17:28] detectron2 INFO: Environment info:
+-------------------------------  -------------------------------------------------------------------------------
+sys.platform                     linux
+Python                           3.10.13 (main, Sep 11 2023, 13:44:35) [GCC 11.2.0]
+numpy                            1.26.2
+detectron2                       0.6 @/lpai/ARM/det/detectron2
+Compiler                         GCC 9.4
+CUDA compiler                    CUDA 12.1
+DETECTRON2_ENV_MODULE            <not set>
+PyTorch                          2.1.2+cu121 @/root/anaconda3/envs/mam/lib/python3.10/site-packages/torch
+PyTorch debug build              False
+torch._C._GLIBCXX_USE_CXX11_ABI  False
+GPU available                    No: torch.cuda.is_available() == False
+Pillow                           10.1.0
+torchvision                      0.16.2+cu121 @/root/anaconda3/envs/mam/lib/python3.10/site-packages/torchvision
+fvcore                           0.1.5.post20221221
+iopath                           0.1.9
+cv2                              4.8.1
+-------------------------------  -------------------------------------------------------------------------------
+PyTorch built with:
+  - GCC 9.3
+  - C++ Version: 201703
+  - Intel(R) oneAPI Math Kernel Library Version 2022.2-Product Build 20220804 for Intel(R) 64 architecture applications
+  - Intel(R) MKL-DNN v3.1.1 (Git Hash 64f6bcbcbab628e96f33a62c3e975f8535a7bde4)
+  - OpenMP 201511 (a.k.a. OpenMP 4.5)
+  - LAPACK is enabled (usually provided by MKL)
+  - NNPACK is enabled
+  - CPU capability usage: AVX512
+  - Build settings: BLAS_INFO=mkl, BUILD_TYPE=Release, CUDA_VERSION=12.1, CUDNN_VERSION=8.9.2, CXX_COMPILER=/opt/rh/devtoolset-9/root/usr/bin/c++, CXX_FLAGS= -D_GLIBCXX_USE_CXX11_ABI=0 -fabi-version=11 -fvisibility-inlines-hidden -DUSE_PTHREADPOOL -DNDEBUG -DUSE_KINETO -DLIBKINETO_NOROCTRACER -DUSE_FBGEMM -DUSE_QNNPACK -DUSE_PYTORCH_QNNPACK -DUSE_XNNPACK -DSYMBOLICATE_MOBILE_DEBUG_HANDLE -O2 -fPIC -Wall -Wextra -Werror=return-type -Werror=non-virtual-dtor -Werror=bool-operation -Wnarrowing -Wno-missing-field-initializers -Wno-type-limits -Wno-array-bounds -Wno-unknown-pragmas -Wno-unused-parameter -Wno-unused-function -Wno-unused-result -Wno-strict-overflow -Wno-strict-aliasing -Wno-stringop-overflow -Wno-psabi -Wno-error=pedantic -Wno-error=old-style-cast -Wno-invalid-partial-specialization -Wno-unused-private-field -Wno-aligned-allocation-unavailable -Wno-missing-braces -fdiagnostics-color=always -faligned-new -Wno-unused-but-set-variable -Wno-maybe-uninitialized -fno-math-errno -fno-trapping-math -Werror=format -Werror=cast-function-type -Wno-stringop-overflow, LAPACK_INFO=mkl, PERF_WITH_AVX=1, PERF_WITH_AVX2=1, PERF_WITH_AVX512=1, TORCH_DISABLE_GPU_ASSERTS=ON, TORCH_VERSION=2.1.2, USE_CUDA=ON, USE_CUDNN=ON, USE_EXCEPTION_PTR=1, USE_GFLAGS=OFF, USE_GLOG=OFF, USE_MKL=ON, USE_MKLDNN=ON, USE_MPI=OFF, USE_NCCL=1, USE_NNPACK=ON, USE_OPENMP=ON, USE_ROCM=OFF, 
+
+[10/28 05:17:28] detectron2 INFO: Command line arguments: Namespace(config_file='projects/ViTDet/configs/COCO/cascade_mask_rcnn_vimdet_b_100ep.py', resume=False, eval_only=False, num_gpus=1, num_machines=1, machine_rank=0, dist_url='tcp://127.13.44.12:60900', opts=['train.output_dir=/lpai/ARM/det/work_dirs/cascade_mask_rcnn_vimdet_b_100ep-4gpu-test-env', 'dataloader.train.num_workers=128', 'dataloader.test.num_workers=8'])
+[10/28 05:17:28] detectron2 INFO: Contents of args.config_file=projects/ViTDet/configs/COCO/cascade_mask_rcnn_vimdet_b_100ep.py:
+from detectron2.config import LazyCall as L
+from detectron2.layers import ShapeSpec
+from detectron2.modeling.box_regression import Box2BoxTransform
+from detectron2.modeling.matcher import Matcher
+from detectron2.modeling.roi_heads import (
+    FastRCNNOutputLayers,
+    FastRCNNConvFCHead,
+    CascadeROIHeads,
+)
+
+from .mask_rcnn_vimdet_b_100ep import (
+    dataloader,
+    lr_multiplier,
+    model,
+    train,
+    optimizer,
+    get_vim_lr_decay_rate,
+)
+
+# arguments that don't exist for Cascade R-CNN
+[model.roi_heads.pop(k) for k in ["box_head", "box_predictor", "proposal_matcher"]]
+
+model.roi_heads.update(
+    _target_=CascadeROIHeads,
+    box_heads=[
+        L(FastRCNNConvFCHead)(
+            input_shape=ShapeSpec(channels=256, height=7, width=7),
+            conv_dims=[256, 256, 256, 256],
+            fc_dims=[1024],
+            conv_norm="LN",
+        )
+        for _ in range(3)
+    ],
+    box_predictors=[
+        L(FastRCNNOutputLayers)(
+            input_shape=ShapeSpec(channels=1024),
+            test_score_thresh=0.05,
+            box2box_transform=L(Box2BoxTransform)(weights=(w1, w1, w2, w2)),
+            cls_agnostic_bbox_reg=True,
+            num_classes="${...num_classes}",
+        )
+        for (w1, w2) in [(10, 5), (20, 10), (30, 15)]
+    ],
+    proposal_matchers=[
+        L(Matcher)(thresholds=[th], labels=[0, 1], allow_low_quality_matches=False)
+        for th in [0.5, 0.6, 0.7]
+    ],
+)
+
+model.backbone.net.pretrained = "/lpai/ARM/mamba_mlp.pth"
+[10/28 05:17:28] detectron2 INFO: Full config saved to /lpai/ARM/det/work_dirs/cascade_mask_rcnn_vimdet_b_100ep-4gpu-test-env/config.yaml
+[10/28 05:17:28] d2.utils.env INFO: Using a generated random seed 28567674
+[10/28 05:17:31] d2.modeling.backbone.vim INFO: _IncompatibleKeys(missing_keys=[], unexpected_keys=['ar_token', 'dec_pos_embed', 'mask', 'enc2dec.weight', 'enc2dec.bias', 'dec_block.0.attn2.q.weight', 'dec_block.0.attn2.q.bias', 'dec_block.0.attn2.kv.weight', 'dec_block.0.attn2.kv.bias', 'dec_block.0.attn2.proj.weight', 'dec_block.0.attn2.proj.bias', 'dec_block.0.norm2_1.weight', 'dec_block.0.norm2_1.bias', 'dec_block.0.norm2_2.weight', 'dec_block.0.norm2_2.bias', 'dec_block.0.norm2.weight', 'dec_block.0.norm2.bias', 'dec_block.0.mlp.fc1.weight', 'dec_block.0.mlp.fc1.bias', 'dec_block.0.mlp.fc2.weight', 'dec_block.0.mlp.fc2.bias', 'dec_block.1.attn2.q.weight', 'dec_block.1.attn2.q.bias', 'dec_block.1.attn2.kv.weight', 'dec_block.1.attn2.kv.bias', 'dec_block.1.attn2.proj.weight', 'dec_block.1.attn2.proj.bias', 'dec_block.1.norm2_1.weight', 'dec_block.1.norm2_1.bias', 'dec_block.1.norm2_2.weight', 'dec_block.1.norm2_2.bias', 'dec_block.1.norm2.weight', 'dec_block.1.norm2.bias', 'dec_block.1.mlp.fc1.weight', 'dec_block.1.mlp.fc1.bias', 'dec_block.1.mlp.fc2.weight', 'dec_block.1.mlp.fc2.bias', 'dec_block.2.attn2.q.weight', 'dec_block.2.attn2.q.bias', 'dec_block.2.attn2.kv.weight', 'dec_block.2.attn2.kv.bias', 'dec_block.2.attn2.proj.weight', 'dec_block.2.attn2.proj.bias', 'dec_block.2.norm2_1.weight', 'dec_block.2.norm2_1.bias', 'dec_block.2.norm2_2.weight', 'dec_block.2.norm2_2.bias', 'dec_block.2.norm2.weight', 'dec_block.2.norm2.bias', 'dec_block.2.mlp.fc1.weight', 'dec_block.2.mlp.fc1.bias', 'dec_block.2.mlp.fc2.weight', 'dec_block.2.mlp.fc2.bias', 'dec_block.3.attn2.q.weight', 'dec_block.3.attn2.q.bias', 'dec_block.3.attn2.kv.weight', 'dec_block.3.attn2.kv.bias', 'dec_block.3.attn2.proj.weight', 'dec_block.3.attn2.proj.bias', 'dec_block.3.norm2_1.weight', 'dec_block.3.norm2_1.bias', 'dec_block.3.norm2_2.weight', 'dec_block.3.norm2_2.bias', 'dec_block.3.norm2.weight', 'dec_block.3.norm2.bias', 'dec_block.3.mlp.fc1.weight', 'dec_block.3.mlp.fc1.bias', 'dec_block.3.mlp.fc2.weight', 'dec_block.3.mlp.fc2.bias', 'norm_1.weight', 'norm_1.bias', 'norm_2.weight', 'norm_2.bias', 'norm_3.weight', 'norm_3.bias', 'norm_4.weight', 'norm_4.bias', 'ar_norm.weight', 'ar_norm.bias', 'ar_pred.weight', 'ar_pred.bias'])
+[10/28 05:17:31] detectron2 INFO: Model:
+GeneralizedRCNN(
+  (backbone): SimpleFeaturePyramid(
+    (simfp_2): Sequential(
+      (0): ConvTranspose2d(768, 384, kernel_size=(2, 2), stride=(2, 2))
+      (1): LayerNorm()
+      (2): GELU(approximate='none')
+      (3): ConvTranspose2d(384, 192, kernel_size=(2, 2), stride=(2, 2))
+      (4): Conv2d(
+        192, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (5): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (simfp_3): Sequential(
+      (0): ConvTranspose2d(768, 384, kernel_size=(2, 2), stride=(2, 2))
+      (1): Conv2d(
+        384, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (2): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (simfp_4): Sequential(
+      (0): Conv2d(
+        768, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (1): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (simfp_5): Sequential(
+      (0): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+      (1): Conv2d(
+        768, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (2): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (net): VisionMambaDet(
+      (patch_embed): PatchEmbed(
+        (proj): Conv2d(3, 768, kernel_size=(16, 16), stride=(16, 16))
+        (norm): Identity()
+      )
+      (pos_drop): Dropout(p=0.0, inplace=False)
+      (drop_path): DropPath()
+      (layers): ModuleList(
+        (0-1): 2 x Block(
+          (mixer): Mamba(
+            (in_proj): Linear(in_features=768, out_features=1536, bias=False)
+            (conv1d): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (act): SiLU()
+            (x_proj): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_b): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c_b): Linear(in_features=48, out_features=768, bias=True)
+            (out_proj): Linear(in_features=768, out_features=768, bias=False)
+          )
+          (mlp): SwiGLU(
+            (w1): Linear(in_features=768, out_features=2048, bias=True)
+            (w2): Linear(in_features=768, out_features=2048, bias=True)
+            (act): SiLU()
+            (ffn_ln): Identity()
+            (w3): Linear(in_features=2048, out_features=768, bias=True)
+            (drop): Dropout(p=0.0, inplace=False)
+          )
+          (drop_path): Identity()
+          (norm1): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+          (norm2): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+        )
+        (2-11): 10 x Block(
+          (mixer): Mamba(
+            (in_proj): Linear(in_features=768, out_features=1536, bias=False)
+            (conv1d): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (act): SiLU()
+            (x_proj): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_b): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c_b): Linear(in_features=48, out_features=768, bias=True)
+            (out_proj): Linear(in_features=768, out_features=768, bias=False)
+          )
+          (mlp): SwiGLU(
+            (w1): Linear(in_features=768, out_features=2048, bias=True)
+            (w2): Linear(in_features=768, out_features=2048, bias=True)
+            (act): SiLU()
+            (ffn_ln): Identity()
+            (w3): Linear(in_features=2048, out_features=768, bias=True)
+            (drop): Dropout(p=0.0, inplace=False)
+          )
+          (drop_path): DropPath()
+          (norm1): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+          (norm2): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+        )
+      )
+    )
+    (top_block): LastLevelMaxPool()
+  )
+  (proposal_generator): RPN(
+    (rpn_head): StandardRPNHead(
+      (conv): Sequential(
+        (conv0): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)
+          (activation): ReLU()
+        )
+        (conv1): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)
+          (activation): ReLU()
+        )
+      )
+      (objectness_logits): Conv2d(256, 3, kernel_size=(1, 1), stride=(1, 1))
+      (anchor_deltas): Conv2d(256, 12, kernel_size=(1, 1), stride=(1, 1))
+    )
+    (anchor_generator): DefaultAnchorGenerator(
+      (cell_anchors): BufferList()
+    )
+  )
+  (roi_heads): CascadeROIHeads(
+    (box_pooler): ROIPooler(
+      (level_poolers): ModuleList(
+        (0): ROIAlign(output_size=(7, 7), spatial_scale=0.25, sampling_ratio=0, aligned=True)
+        (1): ROIAlign(output_size=(7, 7), spatial_scale=0.125, sampling_ratio=0, aligned=True)
+        (2): ROIAlign(output_size=(7, 7), spatial_scale=0.0625, sampling_ratio=0, aligned=True)
+        (3): ROIAlign(output_size=(7, 7), spatial_scale=0.03125, sampling_ratio=0, aligned=True)
+      )
+    )
+    (box_head): ModuleList(
+      (0-2): 3 x FastRCNNConvFCHead(
+        (conv1): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (conv2): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (conv3): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (conv4): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (flatten): Flatten(start_dim=1, end_dim=-1)
+        (fc1): Linear(in_features=12544, out_features=1024, bias=True)
+        (fc_relu1): ReLU()
+      )
+    )
+    (box_predictor): ModuleList(
+      (0-2): 3 x FastRCNNOutputLayers(
+        (cls_score): Linear(in_features=1024, out_features=81, bias=True)
+        (bbox_pred): Linear(in_features=1024, out_features=4, bias=True)
+      )
+    )
+    (mask_pooler): ROIPooler(
+      (level_poolers): ModuleList(
+        (0): ROIAlign(output_size=(14, 14), spatial_scale=0.25, sampling_ratio=0, aligned=True)
+        (1): ROIAlign(output_size=(14, 14), spatial_scale=0.125, sampling_ratio=0, aligned=True)
+        (2): ROIAlign(output_size=(14, 14), spatial_scale=0.0625, sampling_ratio=0, aligned=True)
+        (3): ROIAlign(output_size=(14, 14), spatial_scale=0.03125, sampling_ratio=0, aligned=True)
+      )
+    )
+    (mask_head): MaskRCNNConvUpsampleHead(
+      (mask_fcn1): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (mask_fcn2): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (mask_fcn3): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (mask_fcn4): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (deconv): ConvTranspose2d(256, 256, kernel_size=(2, 2), stride=(2, 2))
+      (deconv_relu): ReLU()
+      (predictor): Conv2d(256, 80, kernel_size=(1, 1), stride=(1, 1))
+    )
+  )
+)
+[10/28 05:18:14] detectron2 INFO: Rank of current process: 0. World size: 1
+[10/28 05:18:14] detectron2 INFO: Environment info:
+-------------------------------  -------------------------------------------------------------------------------
+sys.platform                     linux
+Python                           3.10.13 (main, Sep 11 2023, 13:44:35) [GCC 11.2.0]
+numpy                            1.26.2
+detectron2                       0.6 @/lpai/ARM/det/detectron2
+Compiler                         GCC 9.4
+CUDA compiler                    CUDA 12.1
+DETECTRON2_ENV_MODULE            <not set>
+PyTorch                          2.1.2+cu121 @/root/anaconda3/envs/mam/lib/python3.10/site-packages/torch
+PyTorch debug build              False
+torch._C._GLIBCXX_USE_CXX11_ABI  False
+GPU available                    No: torch.cuda.is_available() == False
+Pillow                           10.1.0
+torchvision                      0.16.2+cu121 @/root/anaconda3/envs/mam/lib/python3.10/site-packages/torchvision
+fvcore                           0.1.5.post20221221
+iopath                           0.1.9
+cv2                              4.8.1
+-------------------------------  -------------------------------------------------------------------------------
+PyTorch built with:
+  - GCC 9.3
+  - C++ Version: 201703
+  - Intel(R) oneAPI Math Kernel Library Version 2022.2-Product Build 20220804 for Intel(R) 64 architecture applications
+  - Intel(R) MKL-DNN v3.1.1 (Git Hash 64f6bcbcbab628e96f33a62c3e975f8535a7bde4)
+  - OpenMP 201511 (a.k.a. OpenMP 4.5)
+  - LAPACK is enabled (usually provided by MKL)
+  - NNPACK is enabled
+  - CPU capability usage: AVX512
+  - Build settings: BLAS_INFO=mkl, BUILD_TYPE=Release, CUDA_VERSION=12.1, CUDNN_VERSION=8.9.2, CXX_COMPILER=/opt/rh/devtoolset-9/root/usr/bin/c++, CXX_FLAGS= -D_GLIBCXX_USE_CXX11_ABI=0 -fabi-version=11 -fvisibility-inlines-hidden -DUSE_PTHREADPOOL -DNDEBUG -DUSE_KINETO -DLIBKINETO_NOROCTRACER -DUSE_FBGEMM -DUSE_QNNPACK -DUSE_PYTORCH_QNNPACK -DUSE_XNNPACK -DSYMBOLICATE_MOBILE_DEBUG_HANDLE -O2 -fPIC -Wall -Wextra -Werror=return-type -Werror=non-virtual-dtor -Werror=bool-operation -Wnarrowing -Wno-missing-field-initializers -Wno-type-limits -Wno-array-bounds -Wno-unknown-pragmas -Wno-unused-parameter -Wno-unused-function -Wno-unused-result -Wno-strict-overflow -Wno-strict-aliasing -Wno-stringop-overflow -Wno-psabi -Wno-error=pedantic -Wno-error=old-style-cast -Wno-invalid-partial-specialization -Wno-unused-private-field -Wno-aligned-allocation-unavailable -Wno-missing-braces -fdiagnostics-color=always -faligned-new -Wno-unused-but-set-variable -Wno-maybe-uninitialized -fno-math-errno -fno-trapping-math -Werror=format -Werror=cast-function-type -Wno-stringop-overflow, LAPACK_INFO=mkl, PERF_WITH_AVX=1, PERF_WITH_AVX2=1, PERF_WITH_AVX512=1, TORCH_DISABLE_GPU_ASSERTS=ON, TORCH_VERSION=2.1.2, USE_CUDA=ON, USE_CUDNN=ON, USE_EXCEPTION_PTR=1, USE_GFLAGS=OFF, USE_GLOG=OFF, USE_MKL=ON, USE_MKLDNN=ON, USE_MPI=OFF, USE_NCCL=1, USE_NNPACK=ON, USE_OPENMP=ON, USE_ROCM=OFF, 
+
+[10/28 05:18:14] detectron2 INFO: Command line arguments: Namespace(config_file='projects/ViTDet/configs/COCO/cascade_mask_rcnn_vimdet_b_100ep.py', resume=False, eval_only=False, num_gpus=1, num_machines=1, machine_rank=0, dist_url='tcp://127.13.44.12:60900', opts=['train.output_dir=/lpai/ARM/det/work_dirs/cascade_mask_rcnn_vimdet_b_100ep-4gpu-test-env', 'dataloader.train.num_workers=128', 'dataloader.test.num_workers=8'])
+[10/28 05:18:14] detectron2 INFO: Contents of args.config_file=projects/ViTDet/configs/COCO/cascade_mask_rcnn_vimdet_b_100ep.py:
+from detectron2.config import LazyCall as L
+from detectron2.layers import ShapeSpec
+from detectron2.modeling.box_regression import Box2BoxTransform
+from detectron2.modeling.matcher import Matcher
+from detectron2.modeling.roi_heads import (
+    FastRCNNOutputLayers,
+    FastRCNNConvFCHead,
+    CascadeROIHeads,
+)
+
+from .mask_rcnn_vimdet_b_100ep import (
+    dataloader,
+    lr_multiplier,
+    model,
+    train,
+    optimizer,
+    get_vim_lr_decay_rate,
+)
+
+# arguments that don't exist for Cascade R-CNN
+[model.roi_heads.pop(k) for k in ["box_head", "box_predictor", "proposal_matcher"]]
+
+model.roi_heads.update(
+    _target_=CascadeROIHeads,
+    box_heads=[
+        L(FastRCNNConvFCHead)(
+            input_shape=ShapeSpec(channels=256, height=7, width=7),
+            conv_dims=[256, 256, 256, 256],
+            fc_dims=[1024],
+            conv_norm="LN",
+        )
+        for _ in range(3)
+    ],
+    box_predictors=[
+        L(FastRCNNOutputLayers)(
+            input_shape=ShapeSpec(channels=1024),
+            test_score_thresh=0.05,
+            box2box_transform=L(Box2BoxTransform)(weights=(w1, w1, w2, w2)),
+            cls_agnostic_bbox_reg=True,
+            num_classes="${...num_classes}",
+        )
+        for (w1, w2) in [(10, 5), (20, 10), (30, 15)]
+    ],
+    proposal_matchers=[
+        L(Matcher)(thresholds=[th], labels=[0, 1], allow_low_quality_matches=False)
+        for th in [0.5, 0.6, 0.7]
+    ],
+)
+
+model.backbone.net.pretrained = "/lpai/ARM/mamba_mlp.pth"
+[10/28 05:18:14] detectron2 INFO: Full config saved to /lpai/ARM/det/work_dirs/cascade_mask_rcnn_vimdet_b_100ep-4gpu-test-env/config.yaml
+[10/28 05:18:14] d2.utils.env INFO: Using a generated random seed 15001598
+[10/28 05:18:17] d2.modeling.backbone.vim INFO: _IncompatibleKeys(missing_keys=[], unexpected_keys=['ar_token', 'dec_pos_embed', 'mask', 'enc2dec.weight', 'enc2dec.bias', 'dec_block.0.attn2.q.weight', 'dec_block.0.attn2.q.bias', 'dec_block.0.attn2.kv.weight', 'dec_block.0.attn2.kv.bias', 'dec_block.0.attn2.proj.weight', 'dec_block.0.attn2.proj.bias', 'dec_block.0.norm2_1.weight', 'dec_block.0.norm2_1.bias', 'dec_block.0.norm2_2.weight', 'dec_block.0.norm2_2.bias', 'dec_block.0.norm2.weight', 'dec_block.0.norm2.bias', 'dec_block.0.mlp.fc1.weight', 'dec_block.0.mlp.fc1.bias', 'dec_block.0.mlp.fc2.weight', 'dec_block.0.mlp.fc2.bias', 'dec_block.1.attn2.q.weight', 'dec_block.1.attn2.q.bias', 'dec_block.1.attn2.kv.weight', 'dec_block.1.attn2.kv.bias', 'dec_block.1.attn2.proj.weight', 'dec_block.1.attn2.proj.bias', 'dec_block.1.norm2_1.weight', 'dec_block.1.norm2_1.bias', 'dec_block.1.norm2_2.weight', 'dec_block.1.norm2_2.bias', 'dec_block.1.norm2.weight', 'dec_block.1.norm2.bias', 'dec_block.1.mlp.fc1.weight', 'dec_block.1.mlp.fc1.bias', 'dec_block.1.mlp.fc2.weight', 'dec_block.1.mlp.fc2.bias', 'dec_block.2.attn2.q.weight', 'dec_block.2.attn2.q.bias', 'dec_block.2.attn2.kv.weight', 'dec_block.2.attn2.kv.bias', 'dec_block.2.attn2.proj.weight', 'dec_block.2.attn2.proj.bias', 'dec_block.2.norm2_1.weight', 'dec_block.2.norm2_1.bias', 'dec_block.2.norm2_2.weight', 'dec_block.2.norm2_2.bias', 'dec_block.2.norm2.weight', 'dec_block.2.norm2.bias', 'dec_block.2.mlp.fc1.weight', 'dec_block.2.mlp.fc1.bias', 'dec_block.2.mlp.fc2.weight', 'dec_block.2.mlp.fc2.bias', 'dec_block.3.attn2.q.weight', 'dec_block.3.attn2.q.bias', 'dec_block.3.attn2.kv.weight', 'dec_block.3.attn2.kv.bias', 'dec_block.3.attn2.proj.weight', 'dec_block.3.attn2.proj.bias', 'dec_block.3.norm2_1.weight', 'dec_block.3.norm2_1.bias', 'dec_block.3.norm2_2.weight', 'dec_block.3.norm2_2.bias', 'dec_block.3.norm2.weight', 'dec_block.3.norm2.bias', 'dec_block.3.mlp.fc1.weight', 'dec_block.3.mlp.fc1.bias', 'dec_block.3.mlp.fc2.weight', 'dec_block.3.mlp.fc2.bias', 'norm_1.weight', 'norm_1.bias', 'norm_2.weight', 'norm_2.bias', 'norm_3.weight', 'norm_3.bias', 'norm_4.weight', 'norm_4.bias', 'ar_norm.weight', 'ar_norm.bias', 'ar_pred.weight', 'ar_pred.bias'])
+[10/28 05:18:18] detectron2 INFO: Model:
+GeneralizedRCNN(
+  (backbone): SimpleFeaturePyramid(
+    (simfp_2): Sequential(
+      (0): ConvTranspose2d(768, 384, kernel_size=(2, 2), stride=(2, 2))
+      (1): LayerNorm()
+      (2): GELU(approximate='none')
+      (3): ConvTranspose2d(384, 192, kernel_size=(2, 2), stride=(2, 2))
+      (4): Conv2d(
+        192, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (5): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (simfp_3): Sequential(
+      (0): ConvTranspose2d(768, 384, kernel_size=(2, 2), stride=(2, 2))
+      (1): Conv2d(
+        384, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (2): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (simfp_4): Sequential(
+      (0): Conv2d(
+        768, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (1): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (simfp_5): Sequential(
+      (0): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+      (1): Conv2d(
+        768, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (2): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (net): VisionMambaDet(
+      (patch_embed): PatchEmbed(
+        (proj): Conv2d(3, 768, kernel_size=(16, 16), stride=(16, 16))
+        (norm): Identity()
+      )
+      (pos_drop): Dropout(p=0.0, inplace=False)
+      (drop_path): DropPath()
+      (layers): ModuleList(
+        (0-1): 2 x Block(
+          (mixer): Mamba(
+            (in_proj): Linear(in_features=768, out_features=1536, bias=False)
+            (conv1d): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (act): SiLU()
+            (x_proj): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_b): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c_b): Linear(in_features=48, out_features=768, bias=True)
+            (out_proj): Linear(in_features=768, out_features=768, bias=False)
+          )
+          (mlp): SwiGLU(
+            (w1): Linear(in_features=768, out_features=2048, bias=True)
+            (w2): Linear(in_features=768, out_features=2048, bias=True)
+            (act): SiLU()
+            (ffn_ln): Identity()
+            (w3): Linear(in_features=2048, out_features=768, bias=True)
+            (drop): Dropout(p=0.0, inplace=False)
+          )
+          (drop_path): Identity()
+          (norm1): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+          (norm2): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+        )
+        (2-11): 10 x Block(
+          (mixer): Mamba(
+            (in_proj): Linear(in_features=768, out_features=1536, bias=False)
+            (conv1d): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (act): SiLU()
+            (x_proj): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_b): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c_b): Linear(in_features=48, out_features=768, bias=True)
+            (out_proj): Linear(in_features=768, out_features=768, bias=False)
+          )
+          (mlp): SwiGLU(
+            (w1): Linear(in_features=768, out_features=2048, bias=True)
+            (w2): Linear(in_features=768, out_features=2048, bias=True)
+            (act): SiLU()
+            (ffn_ln): Identity()
+            (w3): Linear(in_features=2048, out_features=768, bias=True)
+            (drop): Dropout(p=0.0, inplace=False)
+          )
+          (drop_path): DropPath()
+          (norm1): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+          (norm2): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+        )
+      )
+    )
+    (top_block): LastLevelMaxPool()
+  )
+  (proposal_generator): RPN(
+    (rpn_head): StandardRPNHead(
+      (conv): Sequential(
+        (conv0): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)
+          (activation): ReLU()
+        )
+        (conv1): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)
+          (activation): ReLU()
+        )
+      )
+      (objectness_logits): Conv2d(256, 3, kernel_size=(1, 1), stride=(1, 1))
+      (anchor_deltas): Conv2d(256, 12, kernel_size=(1, 1), stride=(1, 1))
+    )
+    (anchor_generator): DefaultAnchorGenerator(
+      (cell_anchors): BufferList()
+    )
+  )
+  (roi_heads): CascadeROIHeads(
+    (box_pooler): ROIPooler(
+      (level_poolers): ModuleList(
+        (0): ROIAlign(output_size=(7, 7), spatial_scale=0.25, sampling_ratio=0, aligned=True)
+        (1): ROIAlign(output_size=(7, 7), spatial_scale=0.125, sampling_ratio=0, aligned=True)
+        (2): ROIAlign(output_size=(7, 7), spatial_scale=0.0625, sampling_ratio=0, aligned=True)
+        (3): ROIAlign(output_size=(7, 7), spatial_scale=0.03125, sampling_ratio=0, aligned=True)
+      )
+    )
+    (box_head): ModuleList(
+      (0-2): 3 x FastRCNNConvFCHead(
+        (conv1): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (conv2): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (conv3): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (conv4): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (flatten): Flatten(start_dim=1, end_dim=-1)
+        (fc1): Linear(in_features=12544, out_features=1024, bias=True)
+        (fc_relu1): ReLU()
+      )
+    )
+    (box_predictor): ModuleList(
+      (0-2): 3 x FastRCNNOutputLayers(
+        (cls_score): Linear(in_features=1024, out_features=81, bias=True)
+        (bbox_pred): Linear(in_features=1024, out_features=4, bias=True)
+      )
+    )
+    (mask_pooler): ROIPooler(
+      (level_poolers): ModuleList(
+        (0): ROIAlign(output_size=(14, 14), spatial_scale=0.25, sampling_ratio=0, aligned=True)
+        (1): ROIAlign(output_size=(14, 14), spatial_scale=0.125, sampling_ratio=0, aligned=True)
+        (2): ROIAlign(output_size=(14, 14), spatial_scale=0.0625, sampling_ratio=0, aligned=True)
+        (3): ROIAlign(output_size=(14, 14), spatial_scale=0.03125, sampling_ratio=0, aligned=True)
+      )
+    )
+    (mask_head): MaskRCNNConvUpsampleHead(
+      (mask_fcn1): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (mask_fcn2): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (mask_fcn3): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (mask_fcn4): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (deconv): ConvTranspose2d(256, 256, kernel_size=(2, 2), stride=(2, 2))
+      (deconv_relu): ReLU()
+      (predictor): Conv2d(256, 80, kernel_size=(1, 1), stride=(1, 1))
+    )
+  )
+)
+[10/28 05:19:35] detectron2 INFO: Rank of current process: 0. World size: 1
+[10/28 05:19:36] detectron2 INFO: Environment info:
+-------------------------------  -------------------------------------------------------------------------------
+sys.platform                     linux
+Python                           3.10.13 (main, Sep 11 2023, 13:44:35) [GCC 11.2.0]
+numpy                            1.26.2
+detectron2                       0.6 @/lpai/ARM/det/detectron2
+Compiler                         GCC 9.4
+CUDA compiler                    CUDA 12.1
+DETECTRON2_ENV_MODULE            <not set>
+PyTorch                          2.1.2+cu121 @/root/anaconda3/envs/mam/lib/python3.10/site-packages/torch
+PyTorch debug build              False
+torch._C._GLIBCXX_USE_CXX11_ABI  False
+GPU available                    No: torch.cuda.is_available() == False
+Pillow                           10.1.0
+torchvision                      0.16.2+cu121 @/root/anaconda3/envs/mam/lib/python3.10/site-packages/torchvision
+fvcore                           0.1.5.post20221221
+iopath                           0.1.9
+cv2                              4.8.1
+-------------------------------  -------------------------------------------------------------------------------
+PyTorch built with:
+  - GCC 9.3
+  - C++ Version: 201703
+  - Intel(R) oneAPI Math Kernel Library Version 2022.2-Product Build 20220804 for Intel(R) 64 architecture applications
+  - Intel(R) MKL-DNN v3.1.1 (Git Hash 64f6bcbcbab628e96f33a62c3e975f8535a7bde4)
+  - OpenMP 201511 (a.k.a. OpenMP 4.5)
+  - LAPACK is enabled (usually provided by MKL)
+  - NNPACK is enabled
+  - CPU capability usage: AVX512
+  - Build settings: BLAS_INFO=mkl, BUILD_TYPE=Release, CUDA_VERSION=12.1, CUDNN_VERSION=8.9.2, CXX_COMPILER=/opt/rh/devtoolset-9/root/usr/bin/c++, CXX_FLAGS= -D_GLIBCXX_USE_CXX11_ABI=0 -fabi-version=11 -fvisibility-inlines-hidden -DUSE_PTHREADPOOL -DNDEBUG -DUSE_KINETO -DLIBKINETO_NOROCTRACER -DUSE_FBGEMM -DUSE_QNNPACK -DUSE_PYTORCH_QNNPACK -DUSE_XNNPACK -DSYMBOLICATE_MOBILE_DEBUG_HANDLE -O2 -fPIC -Wall -Wextra -Werror=return-type -Werror=non-virtual-dtor -Werror=bool-operation -Wnarrowing -Wno-missing-field-initializers -Wno-type-limits -Wno-array-bounds -Wno-unknown-pragmas -Wno-unused-parameter -Wno-unused-function -Wno-unused-result -Wno-strict-overflow -Wno-strict-aliasing -Wno-stringop-overflow -Wno-psabi -Wno-error=pedantic -Wno-error=old-style-cast -Wno-invalid-partial-specialization -Wno-unused-private-field -Wno-aligned-allocation-unavailable -Wno-missing-braces -fdiagnostics-color=always -faligned-new -Wno-unused-but-set-variable -Wno-maybe-uninitialized -fno-math-errno -fno-trapping-math -Werror=format -Werror=cast-function-type -Wno-stringop-overflow, LAPACK_INFO=mkl, PERF_WITH_AVX=1, PERF_WITH_AVX2=1, PERF_WITH_AVX512=1, TORCH_DISABLE_GPU_ASSERTS=ON, TORCH_VERSION=2.1.2, USE_CUDA=ON, USE_CUDNN=ON, USE_EXCEPTION_PTR=1, USE_GFLAGS=OFF, USE_GLOG=OFF, USE_MKL=ON, USE_MKLDNN=ON, USE_MPI=OFF, USE_NCCL=1, USE_NNPACK=ON, USE_OPENMP=ON, USE_ROCM=OFF, 
+
+[10/28 05:19:36] detectron2 INFO: Command line arguments: Namespace(config_file='projects/ViTDet/configs/COCO/cascade_mask_rcnn_vimdet_b_100ep.py', resume=False, eval_only=False, num_gpus=1, num_machines=1, machine_rank=0, dist_url='tcp://127.13.44.12:60900', opts=['train.output_dir=/lpai/ARM/det/work_dirs/cascade_mask_rcnn_vimdet_b_100ep-4gpu-test-env', 'dataloader.train.num_workers=128', 'dataloader.test.num_workers=8'])
+[10/28 05:19:36] detectron2 INFO: Contents of args.config_file=projects/ViTDet/configs/COCO/cascade_mask_rcnn_vimdet_b_100ep.py:
+from detectron2.config import LazyCall as L
+from detectron2.layers import ShapeSpec
+from detectron2.modeling.box_regression import Box2BoxTransform
+from detectron2.modeling.matcher import Matcher
+from detectron2.modeling.roi_heads import (
+    FastRCNNOutputLayers,
+    FastRCNNConvFCHead,
+    CascadeROIHeads,
+)
+
+from .mask_rcnn_vimdet_b_100ep import (
+    dataloader,
+    lr_multiplier,
+    model,
+    train,
+    optimizer,
+    get_vim_lr_decay_rate,
+)
+
+# arguments that don't exist for Cascade R-CNN
+[model.roi_heads.pop(k) for k in ["box_head", "box_predictor", "proposal_matcher"]]
+
+model.roi_heads.update(
+    _target_=CascadeROIHeads,
+    box_heads=[
+        L(FastRCNNConvFCHead)(
+            input_shape=ShapeSpec(channels=256, height=7, width=7),
+            conv_dims=[256, 256, 256, 256],
+            fc_dims=[1024],
+            conv_norm="LN",
+        )
+        for _ in range(3)
+    ],
+    box_predictors=[
+        L(FastRCNNOutputLayers)(
+            input_shape=ShapeSpec(channels=1024),
+            test_score_thresh=0.05,
+            box2box_transform=L(Box2BoxTransform)(weights=(w1, w1, w2, w2)),
+            cls_agnostic_bbox_reg=True,
+            num_classes="${...num_classes}",
+        )
+        for (w1, w2) in [(10, 5), (20, 10), (30, 15)]
+    ],
+    proposal_matchers=[
+        L(Matcher)(thresholds=[th], labels=[0, 1], allow_low_quality_matches=False)
+        for th in [0.5, 0.6, 0.7]
+    ],
+)
+
+model.backbone.net.pretrained = "/lpai/ARM/mamba_mlp.pth"
+[10/28 05:19:36] detectron2 INFO: Full config saved to /lpai/ARM/det/work_dirs/cascade_mask_rcnn_vimdet_b_100ep-4gpu-test-env/config.yaml
+[10/28 05:19:36] d2.utils.env INFO: Using a generated random seed 36350247
+[10/28 05:19:39] d2.modeling.backbone.vim INFO: _IncompatibleKeys(missing_keys=[], unexpected_keys=['ar_token', 'dec_pos_embed', 'mask', 'enc2dec.weight', 'enc2dec.bias', 'dec_block.0.attn2.q.weight', 'dec_block.0.attn2.q.bias', 'dec_block.0.attn2.kv.weight', 'dec_block.0.attn2.kv.bias', 'dec_block.0.attn2.proj.weight', 'dec_block.0.attn2.proj.bias', 'dec_block.0.norm2_1.weight', 'dec_block.0.norm2_1.bias', 'dec_block.0.norm2_2.weight', 'dec_block.0.norm2_2.bias', 'dec_block.0.norm2.weight', 'dec_block.0.norm2.bias', 'dec_block.0.mlp.fc1.weight', 'dec_block.0.mlp.fc1.bias', 'dec_block.0.mlp.fc2.weight', 'dec_block.0.mlp.fc2.bias', 'dec_block.1.attn2.q.weight', 'dec_block.1.attn2.q.bias', 'dec_block.1.attn2.kv.weight', 'dec_block.1.attn2.kv.bias', 'dec_block.1.attn2.proj.weight', 'dec_block.1.attn2.proj.bias', 'dec_block.1.norm2_1.weight', 'dec_block.1.norm2_1.bias', 'dec_block.1.norm2_2.weight', 'dec_block.1.norm2_2.bias', 'dec_block.1.norm2.weight', 'dec_block.1.norm2.bias', 'dec_block.1.mlp.fc1.weight', 'dec_block.1.mlp.fc1.bias', 'dec_block.1.mlp.fc2.weight', 'dec_block.1.mlp.fc2.bias', 'dec_block.2.attn2.q.weight', 'dec_block.2.attn2.q.bias', 'dec_block.2.attn2.kv.weight', 'dec_block.2.attn2.kv.bias', 'dec_block.2.attn2.proj.weight', 'dec_block.2.attn2.proj.bias', 'dec_block.2.norm2_1.weight', 'dec_block.2.norm2_1.bias', 'dec_block.2.norm2_2.weight', 'dec_block.2.norm2_2.bias', 'dec_block.2.norm2.weight', 'dec_block.2.norm2.bias', 'dec_block.2.mlp.fc1.weight', 'dec_block.2.mlp.fc1.bias', 'dec_block.2.mlp.fc2.weight', 'dec_block.2.mlp.fc2.bias', 'dec_block.3.attn2.q.weight', 'dec_block.3.attn2.q.bias', 'dec_block.3.attn2.kv.weight', 'dec_block.3.attn2.kv.bias', 'dec_block.3.attn2.proj.weight', 'dec_block.3.attn2.proj.bias', 'dec_block.3.norm2_1.weight', 'dec_block.3.norm2_1.bias', 'dec_block.3.norm2_2.weight', 'dec_block.3.norm2_2.bias', 'dec_block.3.norm2.weight', 'dec_block.3.norm2.bias', 'dec_block.3.mlp.fc1.weight', 'dec_block.3.mlp.fc1.bias', 'dec_block.3.mlp.fc2.weight', 'dec_block.3.mlp.fc2.bias', 'norm_1.weight', 'norm_1.bias', 'norm_2.weight', 'norm_2.bias', 'norm_3.weight', 'norm_3.bias', 'norm_4.weight', 'norm_4.bias', 'ar_norm.weight', 'ar_norm.bias', 'ar_pred.weight', 'ar_pred.bias'])
+[10/28 05:19:39] detectron2 INFO: Model:
+GeneralizedRCNN(
+  (backbone): SimpleFeaturePyramid(
+    (simfp_2): Sequential(
+      (0): ConvTranspose2d(768, 384, kernel_size=(2, 2), stride=(2, 2))
+      (1): LayerNorm()
+      (2): GELU(approximate='none')
+      (3): ConvTranspose2d(384, 192, kernel_size=(2, 2), stride=(2, 2))
+      (4): Conv2d(
+        192, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (5): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (simfp_3): Sequential(
+      (0): ConvTranspose2d(768, 384, kernel_size=(2, 2), stride=(2, 2))
+      (1): Conv2d(
+        384, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (2): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (simfp_4): Sequential(
+      (0): Conv2d(
+        768, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (1): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (simfp_5): Sequential(
+      (0): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+      (1): Conv2d(
+        768, 256, kernel_size=(1, 1), stride=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+      (2): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+      )
+    )
+    (net): VisionMambaDet(
+      (patch_embed): PatchEmbed(
+        (proj): Conv2d(3, 768, kernel_size=(16, 16), stride=(16, 16))
+        (norm): Identity()
+      )
+      (pos_drop): Dropout(p=0.0, inplace=False)
+      (drop_path): DropPath()
+      (layers): ModuleList(
+        (0-1): 2 x Block(
+          (mixer): Mamba(
+            (in_proj): Linear(in_features=768, out_features=1536, bias=False)
+            (conv1d): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (act): SiLU()
+            (x_proj): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_b): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c_b): Linear(in_features=48, out_features=768, bias=True)
+            (out_proj): Linear(in_features=768, out_features=768, bias=False)
+          )
+          (mlp): SwiGLU(
+            (w1): Linear(in_features=768, out_features=2048, bias=True)
+            (w2): Linear(in_features=768, out_features=2048, bias=True)
+            (act): SiLU()
+            (ffn_ln): Identity()
+            (w3): Linear(in_features=2048, out_features=768, bias=True)
+            (drop): Dropout(p=0.0, inplace=False)
+          )
+          (drop_path): Identity()
+          (norm1): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+          (norm2): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+        )
+        (2-11): 10 x Block(
+          (mixer): Mamba(
+            (in_proj): Linear(in_features=768, out_features=1536, bias=False)
+            (conv1d): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (act): SiLU()
+            (x_proj): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_b): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c): Linear(in_features=48, out_features=768, bias=True)
+            (conv1d_c_b): Conv1d(768, 768, kernel_size=(4,), stride=(1,), padding=(3,), groups=768)
+            (x_proj_c_b): Linear(in_features=768, out_features=80, bias=False)
+            (dt_proj_c_b): Linear(in_features=48, out_features=768, bias=True)
+            (out_proj): Linear(in_features=768, out_features=768, bias=False)
+          )
+          (mlp): SwiGLU(
+            (w1): Linear(in_features=768, out_features=2048, bias=True)
+            (w2): Linear(in_features=768, out_features=2048, bias=True)
+            (act): SiLU()
+            (ffn_ln): Identity()
+            (w3): Linear(in_features=2048, out_features=768, bias=True)
+            (drop): Dropout(p=0.0, inplace=False)
+          )
+          (drop_path): DropPath()
+          (norm1): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+          (norm2): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+        )
+      )
+    )
+    (top_block): LastLevelMaxPool()
+  )
+  (proposal_generator): RPN(
+    (rpn_head): StandardRPNHead(
+      (conv): Sequential(
+        (conv0): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)
+          (activation): ReLU()
+        )
+        (conv1): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)
+          (activation): ReLU()
+        )
+      )
+      (objectness_logits): Conv2d(256, 3, kernel_size=(1, 1), stride=(1, 1))
+      (anchor_deltas): Conv2d(256, 12, kernel_size=(1, 1), stride=(1, 1))
+    )
+    (anchor_generator): DefaultAnchorGenerator(
+      (cell_anchors): BufferList()
+    )
+  )
+  (roi_heads): CascadeROIHeads(
+    (box_pooler): ROIPooler(
+      (level_poolers): ModuleList(
+        (0): ROIAlign(output_size=(7, 7), spatial_scale=0.25, sampling_ratio=0, aligned=True)
+        (1): ROIAlign(output_size=(7, 7), spatial_scale=0.125, sampling_ratio=0, aligned=True)
+        (2): ROIAlign(output_size=(7, 7), spatial_scale=0.0625, sampling_ratio=0, aligned=True)
+        (3): ROIAlign(output_size=(7, 7), spatial_scale=0.03125, sampling_ratio=0, aligned=True)
+      )
+    )
+    (box_head): ModuleList(
+      (0-2): 3 x FastRCNNConvFCHead(
+        (conv1): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (conv2): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (conv3): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (conv4): Conv2d(
+          256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+          (norm): LayerNorm()
+          (activation): ReLU()
+        )
+        (flatten): Flatten(start_dim=1, end_dim=-1)
+        (fc1): Linear(in_features=12544, out_features=1024, bias=True)
+        (fc_relu1): ReLU()
+      )
+    )
+    (box_predictor): ModuleList(
+      (0-2): 3 x FastRCNNOutputLayers(
+        (cls_score): Linear(in_features=1024, out_features=81, bias=True)
+        (bbox_pred): Linear(in_features=1024, out_features=4, bias=True)
+      )
+    )
+    (mask_pooler): ROIPooler(
+      (level_poolers): ModuleList(
+        (0): ROIAlign(output_size=(14, 14), spatial_scale=0.25, sampling_ratio=0, aligned=True)
+        (1): ROIAlign(output_size=(14, 14), spatial_scale=0.125, sampling_ratio=0, aligned=True)
+        (2): ROIAlign(output_size=(14, 14), spatial_scale=0.0625, sampling_ratio=0, aligned=True)
+        (3): ROIAlign(output_size=(14, 14), spatial_scale=0.03125, sampling_ratio=0, aligned=True)
+      )
+    )
+    (mask_head): MaskRCNNConvUpsampleHead(
+      (mask_fcn1): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (mask_fcn2): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (mask_fcn3): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (mask_fcn4): Conv2d(
+        256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False
+        (norm): LayerNorm()
+        (activation): ReLU()
+      )
+      (deconv): ConvTranspose2d(256, 256, kernel_size=(2, 2), stride=(2, 2))
+      (deconv_relu): ReLU()
+      (predictor): Conv2d(256, 80, kernel_size=(1, 1), stride=(1, 1))
+    )
+  )
+)

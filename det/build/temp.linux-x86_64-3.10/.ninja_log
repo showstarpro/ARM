@@ -1,0 +1,17 @@
+# ninja log v5
+9	4963	1730011172180148253	/lpai/ARM/det/build/temp.linux-x86_64-3.10/lpai/ARM/det/detectron2/layers/csrc/cocoeval/cocoeval.o	e2886fae75b5fa07
+9	6867	1730011174076966102	/lpai/ARM/det/build/temp.linux-x86_64-3.10/lpai/ARM/det/detectron2/layers/csrc/box_iou_rotated/box_iou_rotated_cpu.o	8dcd92ddadc48aac
+9	7186	1730011174397359677	/lpai/ARM/det/build/temp.linux-x86_64-3.10/lpai/ARM/det/detectron2/layers/csrc/nms_rotated/nms_rotated_cpu.o	fd362b27cec9fe28
+8	7725	1730011174936092410	/lpai/ARM/det/build/temp.linux-x86_64-3.10/lpai/ARM/det/detectron2/layers/csrc/ROIAlignRotated/ROIAlignRotated_cpu.o	18f614c6a8cf36c5
+9	23079	1730011190286686641	/lpai/ARM/det/build/temp.linux-x86_64-3.10/lpai/ARM/det/detectron2/layers/csrc/vision.o	607649565956aac8
+34	3006	1730016556898069808	/lpai/ARM/det/build/temp.linux-x86_64-3.10/lpai/ARM/det/detectron2/layers/csrc/cuda_version.o	362e3375bb2fb9
+34	5043	1730016558934483435	/lpai/ARM/det/build/temp.linux-x86_64-3.10/lpai/ARM/det/detectron2/layers/csrc/cocoeval/cocoeval.o	7dd3dddf6bdba441
+33	6767	1730016560653122995	/lpai/ARM/det/build/temp.linux-x86_64-3.10/lpai/ARM/det/detectron2/layers/csrc/box_iou_rotated/box_iou_rotated_cpu.o	24c656505871401
+35	7366	1730016561251978181	/lpai/ARM/det/build/temp.linux-x86_64-3.10/lpai/ARM/det/detectron2/layers/csrc/nms_rotated/nms_rotated_cpu.o	d7c81ea09d1d1cc6
+33	7699	1730016561585101725	/lpai/ARM/det/build/temp.linux-x86_64-3.10/lpai/ARM/det/detectron2/layers/csrc/ROIAlignRotated/ROIAlignRotated_cpu.o	60e2b2b2111b67b3
+35	21877	1730016575760163303	/lpai/ARM/det/build/temp.linux-x86_64-3.10/lpai/ARM/det/detectron2/layers/csrc/vision.o	72380cf69e640e60
+33	67968	1730016621826901087	/lpai/ARM/det/build/temp.linux-x86_64-3.10/lpai/ARM/det/detectron2/layers/csrc/ROIAlignRotated/ROIAlignRotated_cuda.o	11ce803ea3042745
+33	69495	1730016623355439546	/lpai/ARM/det/build/temp.linux-x86_64-3.10/lpai/ARM/det/detectron2/layers/csrc/box_iou_rotated/box_iou_rotated_cuda.o	afc2fc66dde1f98d
+34	72264	1730016626121956557	/lpai/ARM/det/build/temp.linux-x86_64-3.10/lpai/ARM/det/detectron2/layers/csrc/deformable/deform_conv_cuda_kernel.o	e8766b63517cc942
+34	78644	1730016632503493163	/lpai/ARM/det/build/temp.linux-x86_64-3.10/lpai/ARM/det/detectron2/layers/csrc/deformable/deform_conv_cuda.o	a6a65f3de58a7546
+35	92366	1730016646224871430	/lpai/ARM/det/build/temp.linux-x86_64-3.10/lpai/ARM/det/detectron2/layers/csrc/nms_rotated/nms_rotated_cuda.o	25eaaedb53c68689
