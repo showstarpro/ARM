@@ -8,7 +8,7 @@ DET_CONFIG=projects/ViTDet/configs/COCO/$DET_CONFIG_NAME.py
 
 
 python tools/lazyconfig_train_net.py \
- --num-gpus 1 --num-machines 1 --machine-rank 0 --dist-url "tcp://127.13.44.12:60900" \
+ --num-gpus 8 --num-machines 1 --machine-rank 0 --dist-url "tcp://127.13.44.12:60900" \
  --config-file ${DET_CONFIG} \
  train.output_dir=/lpai/ARM/det/work_dirs/$DET_CONFIG_NAME-4gpu-test-env \
  dataloader.train.num_workers=128 \
