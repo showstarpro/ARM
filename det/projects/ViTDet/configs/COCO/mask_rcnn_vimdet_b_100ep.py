@@ -37,5 +37,5 @@ lr_multiplier = L(WarmupParamScheduler)(
 
 # Optimizer
 optimizer = model_zoo.get_config("common/optim.py").AdamW
-optimizer.params.lr_factor_func = partial(get_vim_lr_decay_rate, num_layers=24, lr_decay_rate=0.7)
+optimizer.params.lr_factor_func = partial(get_vim_lr_decay_rate, num_layers=12, lr_decay_rate=0.7)
 optimizer.params.overrides = {"pos_embed": {"weight_decay": 0.0}}
